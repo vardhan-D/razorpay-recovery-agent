@@ -43,6 +43,8 @@ class RecoveryCase(BaseModel):
 
     selected_action: Optional[RecoveryAction] = None
 
+    action_history: List[RecoveryAction] = Field(default_factory=list)
+
     amount_recovered: int = 0
 
     recovery_attempts: int = 0

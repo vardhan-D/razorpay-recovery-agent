@@ -8,13 +8,44 @@ from app.models.recovery import (
 )
 from app.services.audit_service import add_audit_event
 from app.recovery.state_machine import transition_case
+from app.models.failure import FailureCategory
 
+SUCCESS_MATRIX = {
+    FailureCategory.insufficient_funds: {
+        RecoveryActionType.retry: 0.35,
+        RecoveryActionType.send_reminder: 0.45,
+        RecoveryActionType.create_payment_link: 0.55,
+        RecoveryActionType.promise_to_pay: 0.60,
+    },
 
-SUCCESS_PROBABILITIES = {
-    RecoveryActionType.retry: 0.55,
-    RecoveryActionType.send_reminder: 0.35,
-    RecoveryActionType.create_payment_link: 0.60,
-    RecoveryActionType.promise_to_pay: 0.45,
+    FailureCategory.bank_unavailable: {
+        RecoveryActionType.retry: 0.75,
+        RecoveryActionType.send_reminder: 0.20,
+        RecoveryActionType.create_payment_link: 0.50,
+    },
+
+    FailureCategory.mandate_issue: {
+        RecoveryActionType.retry: 0.05,
+        RecoveryActionType.create_payment_link: 0.65,
+        RecoveryActionType.send_reminder: 0.40,
+    },
+
+    FailureCategory.authentication_issue: {
+        RecoveryActionType.retry: 0.10,
+        RecoveryActionType.send_reminder: 0.60,
+        RecoveryActionType.create_payment_link: 0.70,
+    },
+
+    FailureCategory.technical_error: {
+        RecoveryActionType.retry: 0.70,
+        RecoveryActionType.create_payment_link: 0.55,
+    },
+
+    FailureCategory.unknown: {
+        RecoveryActionType.retry: 0.10,
+        RecoveryActionType.send_reminder: 0.20,
+        RecoveryActionType.create_payment_link: 0.25,
+    },
 }
 
 
@@ -62,6 +93,10 @@ def execute_recovery_action(case: RecoveryCase) -> RecoveryCase:
 
         return case
 
+    case.action_history.append(
+        case.selected_action
+    )
+    
     case.recovery_attempts += 1
 
     add_audit_event(
@@ -74,7 +109,12 @@ def execute_recovery_action(case: RecoveryCase) -> RecoveryCase:
         },
     )
 
-    probability = SUCCESS_PROBABILITIES.get(
+    category_probabilities = SUCCESS_MATRIX.get(
+        case.failure.category,
+        {}
+    )
+
+    probability = category_probabilities.get(
         action_type,
         0.0,
     )

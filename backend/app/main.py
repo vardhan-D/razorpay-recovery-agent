@@ -12,6 +12,9 @@ from app.models.subscription import (
 )
 from app.models.failure import FailureInfo, FailureCategory
 from app.models.recovery import RecoveryCase
+from app.recovery.orchestrator import (
+    run_recovery_workflow_batch,
+)
 
 
 app = FastAPI(
@@ -130,4 +133,28 @@ def run_recovery(count: int = 20):
     return {
         "metrics": metrics,
         "cases": executed_cases,
+    }
+
+@app.get("/demo/run-agentic-recovery")
+def run_agentic_recovery(count: int = 20):
+
+    if count < 1:
+        count = 1
+
+    if count > 500:
+        count = 500
+
+    cases = generate_failure_batch(count)
+
+    processed_cases = run_recovery_workflow_batch(
+        cases
+    )
+
+    metrics = calculate_recovery_metrics(
+        processed_cases
+    )
+
+    return {
+        "metrics": metrics,
+        "cases": processed_cases,
     }
