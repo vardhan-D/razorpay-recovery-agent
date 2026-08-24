@@ -6,7 +6,10 @@ from app.models.recovery import (
 )
 
 from app.models.subscription import MandateStatus
+from app.models.audit import AuditEventType
+
 from app.recovery.rules import RECOVERY_RULES
+from app.services.audit_service import add_audit_event
 
 
 MAX_RETRY_ATTEMPTS = 3
@@ -17,8 +20,6 @@ def decide_recovery_action(case: RecoveryCase) -> RecoveryCase:
     Decide the next safe recovery action for a failed payment.
     """
 
-    # Safety rule 1:
-    # Never continue recovery if the case is already complete.
     if case.recovery_status in {
         RecoveryStatus.recovered,
         RecoveryStatus.stopped,
@@ -26,8 +27,6 @@ def decide_recovery_action(case: RecoveryCase) -> RecoveryCase:
     }:
         return case
 
-    # Safety rule 2:
-    # Stop automatic retries after the maximum allowed attempts.
     if case.payment.attempt_number >= MAX_RETRY_ATTEMPTS:
         case.selected_action = RecoveryAction(
             action_type=RecoveryActionType.escalate,
@@ -36,10 +35,18 @@ def decide_recovery_action(case: RecoveryCase) -> RecoveryCase:
 
         case.recovery_status = RecoveryStatus.escalated
 
+        add_audit_event(
+            case,
+            AuditEventType.escalated,
+            "Maximum retry attempts reached. Case escalated for manual review.",
+            {
+                "attempt_number": case.payment.attempt_number,
+                "max_attempts": MAX_RETRY_ATTEMPTS,
+            },
+        )
+
         return case
 
-    # Safety rule 3:
-    # Invalid mandate should never trigger another automatic mandate retry.
     if case.subscription.mandate_status in {
         MandateStatus.expired,
         MandateStatus.revoked,
@@ -51,6 +58,22 @@ def decide_recovery_action(case: RecoveryCase) -> RecoveryCase:
         )
 
         case.recovery_status = RecoveryStatus.action_scheduled
+
+        add_audit_event(
+            case,
+            AuditEventType.action_selected,
+            "Payment link selected because the mandate is inactive.",
+            {
+                "action": RecoveryActionType.create_payment_link.value,
+                "mandate_status": case.subscription.mandate_status.value,
+            },
+        )
+
+        add_audit_event(
+            case,
+            AuditEventType.action_scheduled,
+            "Fallback payment-link recovery action scheduled.",
+        )
 
         return case
 
@@ -64,6 +87,15 @@ def decide_recovery_action(case: RecoveryCase) -> RecoveryCase:
 
         case.recovery_status = RecoveryStatus.escalated
 
+        add_audit_event(
+            case,
+            AuditEventType.escalated,
+            "No safe recovery rule exists. Case escalated.",
+            {
+                "failure_category": case.failure.category.value,
+            },
+        )
+
         return case
 
     case.selected_action = RecoveryAction(
@@ -74,7 +106,34 @@ def decide_recovery_action(case: RecoveryCase) -> RecoveryCase:
 
     case.recovery_status = RecoveryStatus.action_scheduled
 
+    add_audit_event(
+        case,
+        AuditEventType.action_selected,
+        f"Recovery action selected: {rule['action'].value}.",
+        {
+            "failure_category": case.failure.category.value,
+            "action": rule["action"].value,
+        },
+    )
+
+    add_audit_event(
+        case,
+        AuditEventType.action_scheduled,
+        rule["reason"],
+        {
+            "scheduled_after_minutes": rule["delay_minutes"],
+        },
+    )
+
     return case
+
+
+def process_recovery_batch(cases):
+    return [
+        decide_recovery_action(case)
+        for case in cases
+    ]
+
 
 def calculate_decision_summary(cases):
     action_counts = {}
@@ -93,9 +152,3 @@ def calculate_decision_summary(cases):
         "total_cases": len(cases),
         "action_breakdown": action_counts,
     }
-
-def process_recovery_batch(cases):
-    return [
-        decide_recovery_action(case)
-        for case in cases
-    ]

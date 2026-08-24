@@ -8,7 +8,8 @@ from app.models.subscription import (
 )
 from app.models.failure import FailureInfo, FailureCategory
 from app.models.recovery import RecoveryCase
-
+from app.models.audit import AuditEventType
+from app.services.audit_service import add_audit_event
 
 FAILURE_SCENARIOS = [
     {
@@ -134,12 +135,41 @@ def generate_recovery_case(index: int) -> RecoveryCase:
         retryable=failure_scenario["retryable"],
     )
 
-    return RecoveryCase(
+    case = RecoveryCase(
         case_id=case_id,
         payment=payment,
         subscription=subscription,
         failure=failure,
     )
+
+    add_audit_event(
+        case,
+        AuditEventType.payment_failed,
+        f"Payment {payment.payment_id} failed for ₹{payment.amount}.",
+        {
+            "payment_id": payment.payment_id,
+            "amount": payment.amount,
+            "failure_code": failure.failure_code,
+        },
+    )
+
+    add_audit_event(
+        case,
+        AuditEventType.case_created,
+        f"Recovery case {case.case_id} created.",
+    )
+
+    add_audit_event(
+        case,
+        AuditEventType.failure_classified,
+        f"Failure classified as {failure.category.value}.",
+        {
+            "category": failure.category.value,
+            "retryable": failure.retryable,
+        },
+    )
+
+    return case
 
 
 def generate_failure_batch(count: int = 20):

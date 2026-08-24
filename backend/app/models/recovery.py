@@ -1,7 +1,8 @@
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
+from app.models.audit import AuditEvent
 from app.models.payment import Payment
 from app.models.subscription import Subscription
 from app.models.failure import FailureInfo
@@ -40,3 +41,4 @@ class RecoveryCase(BaseModel):
     recovery_status: RecoveryStatus = RecoveryStatus.pending
     selected_action: Optional[RecoveryAction] = None
     amount_recovered: int = 0
+    audit_trail: List[AuditEvent] = Field(default_factory=list)
