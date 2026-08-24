@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
-
+from app.recovery.executor import execute_recovery_batch
+from app.services.metrics_service import calculate_recovery_metrics
 from app.recovery.engine import decide_recovery_action,process_recovery_batch,calculate_decision_summary
 from app.services.simulation_service import generate_failure_batch,calculate_batch_summary
 from app.models.payment import Payment, PaymentStatus, PaymentMethod
@@ -103,4 +104,30 @@ def recovery_batch(count: int = 20):
     return {
         "summary": summary,
         "cases": processed_cases,
+    }
+
+@app.get("/demo/run-recovery")
+def run_recovery(count: int = 20):
+
+    if count < 1:
+        count = 1
+
+    if count > 500:
+        count = 500
+
+    cases = generate_failure_batch(count)
+
+    decided_cases = process_recovery_batch(cases)
+
+    executed_cases = execute_recovery_batch(
+        decided_cases
+    )
+
+    metrics = calculate_recovery_metrics(
+        executed_cases
+    )
+
+    return {
+        "metrics": metrics,
+        "cases": executed_cases,
     }

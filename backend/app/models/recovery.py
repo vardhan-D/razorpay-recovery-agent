@@ -38,7 +38,13 @@ class RecoveryCase(BaseModel):
     payment: Payment
     subscription: Subscription
     failure: FailureInfo
+
     recovery_status: RecoveryStatus = RecoveryStatus.pending
+
     selected_action: Optional[RecoveryAction] = None
+
     amount_recovered: int = 0
+
+    recovery_attempts: int = 0
+
     audit_trail: List[AuditEvent] = Field(default_factory=list)

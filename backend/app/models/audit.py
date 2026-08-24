@@ -12,6 +12,7 @@ class AuditEventType(str, Enum):
     action_selected = "action_selected"
     action_scheduled = "action_scheduled"
     action_executed = "action_executed"
+    action_failed = "action_failed"
     payment_recovered = "payment_recovered"
     escalated = "escalated"
     stopped = "stopped"
