@@ -1,14 +1,40 @@
+import hashlib
+import hmac
+import json
 from typing import Any, Dict
 
+from app.config import RAZORPAY_WEBHOOK_SECRET
 
-def parse_razorpay_event(payload: Dict[str, Any]) -> dict:
-    """
-    Extract the basic event information from a Razorpay webhook payload.
-    """
 
-    event_name = payload.get("event")
+def verify_webhook_signature(
+    raw_body: bytes,
+    signature: str,
+) -> bool:
+    if not RAZORPAY_WEBHOOK_SECRET:
+        raise ValueError(
+            "RAZORPAY_WEBHOOK_SECRET is missing."
+        )
+
+    expected_signature = hmac.new(
+        key=RAZORPAY_WEBHOOK_SECRET.encode("utf-8"),
+        msg=raw_body,
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+    return hmac.compare_digest(
+        expected_signature,
+        signature,
+    )
+
+
+def parse_razorpay_event(
+    raw_body: bytes,
+) -> Dict[str, Any]:
+    payload = json.loads(
+        raw_body.decode("utf-8")
+    )
 
     return {
-        "event": event_name,
+        "event": payload.get("event"),
         "payload": payload,
     }

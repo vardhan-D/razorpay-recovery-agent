@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Header, HTTPException
 
-from app.razorpay.webhooks import parse_razorpay_event
+from app.razorpay.webhooks import parse_razorpay_event,verify_webhook_signature
 from app.recovery.executor import execute_recovery_batch
 from app.services.metrics_service import calculate_recovery_metrics
 from app.recovery.engine import decide_recovery_action,process_recovery_batch,calculate_decision_summary
@@ -11,9 +11,14 @@ from app.models.subscription import (
     SubscriptionStatus,
     MandateStatus,
 )
+from app.razorpay.mapper import (
+    razorpay_event_to_recovery_case,
+)
 from app.models.failure import FailureInfo, FailureCategory
 from app.models.recovery import RecoveryCase
 from app.recovery.orchestrator import (
+    
+    run_recovery_workflow,
     run_recovery_workflow_batch,
 )
 from app.razorpay.client import get_razorpay_client
@@ -187,13 +192,63 @@ def test_razorpay_connection():
         }
 
 @app.post("/webhooks/razorpay")
-async def razorpay_webhook(request: Request):
+async def razorpay_webhook(
+    request: Request,
+    x_razorpay_signature: str = Header(None),
+):
+    raw_body = await request.body()
 
-    payload = await request.json()
+    if not x_razorpay_signature:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing Razorpay signature.",
+        )
 
-    parsed_event = parse_razorpay_event(payload)
+    is_valid = verify_webhook_signature(
+        raw_body,
+        x_razorpay_signature,
+    )
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid Razorpay webhook signature.",
+        )
+
+    parsed_event = parse_razorpay_event(
+        raw_body
+    )
+
+    event_name = parsed_event["event"]
+
+    supported_failure_events = {
+        "subscription.pending",
+        "subscription.halted",
+    }
+
+    if event_name not in supported_failure_events:
+        return {
+            "received": True,
+            "verified": True,
+            "event": event_name,
+            "processed": False,
+            "reason": "Event does not require recovery processing.",
+        }
+
+    recovery_case = (
+        razorpay_event_to_recovery_case(
+            parsed_event
+        )
+    )
+
+    processed_case = run_recovery_workflow(
+        recovery_case
+    )
 
     return {
         "received": True,
-        "event": parsed_event["event"],
+        "verified": True,
+        "event": event_name,
+        "processed": True,
+        "recovery_case": processed_case,
     }
