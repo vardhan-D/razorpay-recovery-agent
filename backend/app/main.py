@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
+from app.razorpay.webhooks import parse_razorpay_event
 from app.recovery.executor import execute_recovery_batch
 from app.services.metrics_service import calculate_recovery_metrics
 from app.recovery.engine import decide_recovery_action,process_recovery_batch,calculate_decision_summary
@@ -15,6 +16,7 @@ from app.models.recovery import RecoveryCase
 from app.recovery.orchestrator import (
     run_recovery_workflow_batch,
 )
+from app.razorpay.client import get_razorpay_client
 
 
 app = FastAPI(
@@ -157,4 +159,41 @@ def run_agentic_recovery(count: int = 20):
     return {
         "metrics": metrics,
         "cases": processed_cases,
+    }
+
+@app.get("/razorpay/test-connection")
+def test_razorpay_connection():
+    try:
+        client = get_razorpay_client()
+
+        payments = client.payment.all(
+            {
+                "count": 1
+            }
+        )
+
+        return {
+            "connected": True,
+            "message": "Successfully connected to Razorpay Test Mode.",
+            "payments_found": len(
+                payments.get("items", [])
+            ),
+        }
+
+    except Exception as exc:
+        return {
+            "connected": False,
+            "error": str(exc),
+        }
+
+@app.post("/webhooks/razorpay")
+async def razorpay_webhook(request: Request):
+
+    payload = await request.json()
+
+    parsed_event = parse_razorpay_event(payload)
+
+    return {
+        "received": True,
+        "event": parsed_event["event"],
     }
