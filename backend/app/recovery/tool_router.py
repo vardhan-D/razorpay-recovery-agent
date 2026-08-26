@@ -122,7 +122,7 @@ def schedule_retry_tool(
     case.recovery_attempts += 1
 
     case.recovery_status = (
-        RecoveryStatus.action_scheduled
+        RecoveryStatus.waiting
     )
 
     add_audit_event(
@@ -152,7 +152,7 @@ def send_reminder_tool(
     case.recovery_attempts += 1
 
     case.recovery_status = (
-        RecoveryStatus.action_scheduled
+        RecoveryStatus.waiting
     )
 
     add_audit_event(
@@ -180,7 +180,7 @@ def create_promise_to_pay_tool(
     case.recovery_attempts += 1
 
     case.recovery_status = (
-        RecoveryStatus.action_scheduled
+        RecoveryStatus.waiting
     )
 
     add_audit_event(

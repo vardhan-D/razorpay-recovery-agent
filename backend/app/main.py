@@ -11,6 +11,9 @@ from app.models.subscription import (
     SubscriptionStatus,
     MandateStatus,
 )
+from app.agents.agent_orchestrator import (
+    run_full_ai_recovery_loop,
+)
 from app.agents.recovery_agent import (
     run_ai_recovery_step,
 )
@@ -552,6 +555,52 @@ def test_ai_tool_execution():
 
     processed_case = (
         run_ai_recovery_step(
+            case
+        )
+    )
+
+    return processed_case
+
+@app.get("/demo/full-ai-agent")
+def test_full_ai_agent():
+
+    payment = Payment(
+        payment_id="pay_full_agent_001",
+        customer_id="cust_full_agent_001",
+        subscription_id="sub_full_agent_001",
+        amount=1499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription = Subscription(
+        subscription_id="sub_full_agent_001",
+        customer_id="cust_full_agent_001",
+        plan_name="Premium Monthly",
+        amount=1499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure = FailureInfo(
+        failure_code="BAD_REQUEST_ERROR",
+        failure_message=(
+            "Issuer bank is temporarily unavailable"
+        ),
+        category=FailureCategory.bank_unavailable,
+        retryable=True,
+    )
+
+    case = RecoveryCase(
+        case_id="case_full_agent_001",
+        payment=payment,
+        subscription=subscription,
+        failure=failure,
+    )
+
+    processed_case = (
+        run_full_ai_recovery_loop(
             case
         )
     )

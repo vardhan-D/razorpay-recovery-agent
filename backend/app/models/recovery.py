@@ -21,6 +21,7 @@ class RecoveryStatus(str, Enum):
     pending = "pending"
     investigating = "investigating"
     action_scheduled = "action_scheduled"
+    waiting = "waiting"
     recovered = "recovered"
     failed = "failed"
     escalated = "escalated"
