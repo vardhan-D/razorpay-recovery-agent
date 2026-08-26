@@ -34,3 +34,12 @@ class AIDecision(BaseModel):
     retry_after_minutes: int | None = None
 
     reasoning_summary: str
+
+class SafetyValidationResult(BaseModel):
+    approved: bool
+
+    original_action: AIRecommendedAction
+
+    final_action: AIRecommendedAction
+
+    reason: str

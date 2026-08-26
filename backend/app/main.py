@@ -11,6 +11,12 @@ from app.models.subscription import (
     SubscriptionStatus,
     MandateStatus,
 )
+from app.agents.recovery_agent import (
+    run_ai_recovery_step,
+)
+from app.recovery.ai_safety import (
+    validate_ai_decision,
+)
 from app.agents.diagnosis_agent import (
     diagnose_case_with_ai,
 )
@@ -452,3 +458,102 @@ def test_ai_diagnosis():
         "case": case,
         "ai_decision": decision,
     }
+
+@app.get("/demo/ai-safe-decision")
+def test_ai_safe_decision():
+
+    payment = Payment(
+        payment_id="pay_ai_safe_001",
+        customer_id="cust_ai_safe_001",
+        subscription_id="sub_ai_safe_001",
+        amount=1499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription = Subscription(
+        subscription_id="sub_ai_safe_001",
+        customer_id="cust_ai_safe_001",
+        plan_name="Premium Monthly",
+        amount=1499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure = FailureInfo(
+        failure_code="BAD_REQUEST_ERROR",
+        failure_message=(
+            "Issuer bank is temporarily unavailable"
+        ),
+        category=FailureCategory.bank_unavailable,
+        retryable=True,
+    )
+
+    case = RecoveryCase(
+        case_id="case_ai_safe_001",
+        payment=payment,
+        subscription=subscription,
+        failure=failure,
+    )
+
+    ai_decision = diagnose_case_with_ai(
+        case
+    )
+
+    safety_result = validate_ai_decision(
+        case,
+        ai_decision,
+    )
+
+    return {
+        "case": case,
+        "ai_decision": ai_decision,
+        "safety_validation": safety_result,
+    }
+
+@app.get("/demo/ai-tool-execution")
+def test_ai_tool_execution():
+
+    payment = Payment(
+        payment_id="pay_agent_001",
+        customer_id="cust_agent_001",
+        subscription_id="sub_agent_001",
+        amount=1499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription = Subscription(
+        subscription_id="sub_agent_001",
+        customer_id="cust_agent_001",
+        plan_name="Premium Monthly",
+        amount=1499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure = FailureInfo(
+        failure_code="BAD_REQUEST_ERROR",
+        failure_message=(
+            "Issuer bank is temporarily unavailable"
+        ),
+        category=FailureCategory.bank_unavailable,
+        retryable=True,
+    )
+
+    case = RecoveryCase(
+        case_id="case_agent_001",
+        payment=payment,
+        subscription=subscription,
+        failure=failure,
+    )
+
+    processed_case = (
+        run_ai_recovery_step(
+            case
+        )
+    )
+
+    return processed_case
