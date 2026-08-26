@@ -11,6 +11,27 @@ from app.models.subscription import (
     SubscriptionStatus,
     MandateStatus,
 )
+from app.agents.diagnosis_agent import (
+    diagnose_case_with_ai,
+)
+from app.razorpay.mapper import (
+    razorpay_event_to_recovery_case,
+    extract_recovery_case_id_from_payment_link,
+)
+from app.services.recovery_service import (
+    mark_case_recovered,
+)
+from app.recovery.live_orchestrator import (
+    run_live_recovery_workflow,
+)
+from app.services.recovery_store import (
+    save_recovery_case,
+    get_recovery_case,
+    get_all_recovery_cases,
+)
+from app.razorpay.payment_links import (
+    create_recovery_payment_link,
+)
 from app.razorpay.mapper import (
     razorpay_event_to_recovery_case,
 )
@@ -221,6 +242,58 @@ async def razorpay_webhook(
 
     event_name = parsed_event["event"]
 
+    if event_name in {
+        "payment_link.paid",
+    }:
+        case_id = (
+            extract_recovery_case_id_from_payment_link(
+                parsed_event
+            )
+        )
+
+        if not case_id:
+            return {
+                "received": True,
+                "verified": True,
+                "event": event_name,
+                "processed": False,
+                "reason": (
+                    "No recovery case linked "
+                    "to Payment Link."
+                ),
+            }
+
+        case = get_recovery_case(
+            case_id
+        )
+
+        if not case:
+            return {
+                "received": True,
+                "verified": True,
+                "event": event_name,
+                "processed": False,
+                "reason": (
+                    "Recovery case not found."
+                ),
+            }
+
+        mark_case_recovered(
+            case
+        )
+
+        save_recovery_case(
+            case
+        )
+
+        return {
+            "received": True,
+            "verified": True,
+            "event": event_name,
+            "processed": True,
+            "recovery_case": case,
+        }
+
     supported_failure_events = {
         "subscription.pending",
         "subscription.halted",
@@ -241,8 +314,12 @@ async def razorpay_webhook(
         )
     )
 
-    processed_case = run_recovery_workflow(
+    processed_case = run_live_recovery_workflow(
         recovery_case
+    )
+
+    save_recovery_case(
+        processed_case
     )
 
     return {
@@ -251,4 +328,127 @@ async def razorpay_webhook(
         "event": event_name,
         "processed": True,
         "recovery_case": processed_case,
+    }
+
+@app.get("/razorpay/test-payment-link")
+def test_payment_link():
+
+    payment = Payment(
+        payment_id="pay_test_recovery_001",
+        customer_id="cust_test_001",
+        subscription_id="sub_test_001",
+        amount=1499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription = Subscription(
+        subscription_id="sub_test_001",
+        customer_id="cust_test_001",
+        plan_name="Premium Monthly",
+        amount=1499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.inactive,
+    )
+
+    failure = FailureInfo(
+        failure_code="MANDATE_INVALID",
+        failure_message="Mandate is inactive",
+        category=FailureCategory.mandate_issue,
+        retryable=False,
+    )
+
+    case = RecoveryCase(
+        case_id="test_payment_link_001",
+        payment=payment,
+        subscription=subscription,
+        failure=failure,
+    )
+
+    result = create_recovery_payment_link(
+        case
+    )
+
+    return {
+        "created": True,
+        "payment_link_id": result.get("id"),
+        "short_url": result.get("short_url"),
+        "status": result.get("status"),
+        "amount": result.get("amount"),
+    }
+
+@app.get("/recovery-cases")
+def list_recovery_cases():
+    return {
+        "count": len(
+            get_all_recovery_cases()
+        ),
+        "cases": get_all_recovery_cases(),
+    }
+
+@app.get(
+    "/recovery-cases/{case_id}"
+)
+def fetch_recovery_case(
+    case_id: str,
+):
+
+    case = get_recovery_case(
+        case_id
+    )
+
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Recovery case not found.",
+        )
+
+    return case
+
+@app.get("/demo/ai-diagnosis")
+def test_ai_diagnosis():
+
+    payment = Payment(
+        payment_id="pay_ai_001",
+        customer_id="cust_ai_001",
+        subscription_id="sub_ai_001",
+        amount=1499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription = Subscription(
+        subscription_id="sub_ai_001",
+        customer_id="cust_ai_001",
+        plan_name="Premium Monthly",
+        amount=1499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure = FailureInfo(
+        failure_code="BAD_REQUEST_ERROR",
+        failure_message=(
+            "Issuer bank is temporarily unavailable"
+        ),
+        category=FailureCategory.bank_unavailable,
+        retryable=True,
+    )
+
+    case = RecoveryCase(
+        case_id="case_ai_001",
+        payment=payment,
+        subscription=subscription,
+        failure=failure,
+    )
+
+    decision = diagnose_case_with_ai(
+        case
+    )
+
+    return {
+        "case": case,
+        "ai_decision": decision,
     }

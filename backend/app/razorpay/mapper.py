@@ -271,3 +271,48 @@ def razorpay_event_to_recovery_case(
     )
 
     return case
+
+def extract_recovery_case_id_from_payment_link(
+    parsed_event: dict,
+):
+    payload = parsed_event[
+        "payload"
+    ]
+
+    payment_link_entity = (
+        payload.get("payload", {})
+        .get("payment_link", {})
+        .get("entity", {})
+    )
+
+    notes = payment_link_entity.get(
+        "notes",
+        {},
+    )
+
+    case_id = notes.get(
+        "recovery_case_id"
+    )
+
+    if case_id:
+        return case_id
+
+    reference_id = (
+        payment_link_entity.get(
+            "reference_id"
+        )
+    )
+
+    if (
+        reference_id
+        and reference_id.startswith(
+            "recovery_"
+        )
+    ):
+        return reference_id.replace(
+            "recovery_",
+            "",
+            1,
+        )
+
+    return None

@@ -40,13 +40,18 @@ class RecoveryCase(BaseModel):
     failure: FailureInfo
 
     recovery_status: RecoveryStatus = RecoveryStatus.pending
-
     selected_action: Optional[RecoveryAction] = None
 
-    action_history: List[RecoveryAction] = Field(default_factory=list)
+    action_history: List[RecoveryAction] = Field(
+        default_factory=list
+    )
 
     amount_recovered: int = 0
-
     recovery_attempts: int = 0
 
-    audit_trail: List[AuditEvent] = Field(default_factory=list)
+    payment_link_id: Optional[str] = None
+    payment_link_url: Optional[str] = None
+
+    audit_trail: List[AuditEvent] = Field(
+        default_factory=list
+    )
