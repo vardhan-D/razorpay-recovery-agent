@@ -11,6 +11,7 @@ from app.models.subscription import (
     SubscriptionStatus,
     MandateStatus,
 )
+from app.init_db import init_db
 from app.agents.agent_orchestrator import (
     run_full_ai_recovery_loop,
 )
@@ -60,6 +61,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
+init_db()
 
 @app.get("/")
 def root():
@@ -606,3 +608,16 @@ def test_full_ai_agent():
     )
 
     return processed_case
+
+@app.get("/database/status")
+def database_status():
+
+    cases = get_all_recovery_cases()
+
+    return {
+        "connected": True,
+        "database": "sqlite",
+        "stored_recovery_cases": len(
+            cases
+        ),
+    }

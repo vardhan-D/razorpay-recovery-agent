@@ -4,7 +4,11 @@ from app.agents.diagnosis_agent import (
 
 from app.models.audit import AuditEventType
 from app.models.recovery import RecoveryCase
-
+from app.models.recovery import (
+    RecoveryCase,
+    RecoveryAction,
+    RecoveryActionType,
+)
 from app.recovery.ai_safety import (
     validate_ai_decision,
 )
@@ -84,6 +88,34 @@ def run_ai_recovery_step(
                 safety_result.reason
             ),
         },
+    )
+
+    final_action = (
+        safety_result.final_action.value
+    )
+
+    recovery_action = RecoveryAction(
+        action_type=RecoveryActionType(
+            final_action
+        ),
+        reason=(
+            ai_decision.reasoning_summary
+            if safety_result.approved
+            else safety_result.reason
+        ),
+        scheduled_after_minutes=(
+            ai_decision.retry_after_minutes
+            if final_action == "retry"
+            else None
+        ),
+    )
+
+    case.selected_action = (
+        recovery_action
+    )
+
+    case.action_history.append(
+        recovery_action
     )
 
     # 3. Execute trusted backend tool
