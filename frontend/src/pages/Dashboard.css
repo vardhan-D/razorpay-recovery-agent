@@ -1,0 +1,338 @@
+.dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px;
+  }
+  
+  
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+  
+    margin-bottom: 32px;
+  }
+  
+  
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  
+  .dashboard-header h1 {
+    margin: 0;
+  
+    font-size: 32px;
+    letter-spacing: -1px;
+  }
+  
+  
+  .dashboard-header p {
+    margin: 8px 0 0;
+  
+    color: #6b7280;
+  }
+  
+  
+  .agent-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  
+    padding: 6px 10px;
+  
+    border: 1px solid #d1fae5;
+    border-radius: 999px;
+  
+    background: #ecfdf5;
+  
+    color: #047857;
+  
+    font-size: 13px;
+    font-weight: 600;
+  }
+  
+  
+  .agent-dot {
+    width: 8px;
+    height: 8px;
+  
+    border-radius: 50%;
+  
+    background: #10b981;
+  }
+  
+  
+  .environment-badge {
+    padding: 8px 12px;
+  
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+  
+    background: white;
+  
+    color: #4b5563;
+  
+    font-size: 13px;
+    font-weight: 600;
+  }
+  
+  
+  .metrics-grid {
+    display: grid;
+  
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+  
+    gap: 16px;
+  
+    margin-bottom: 32px;
+  }
+  
+  
+  .metric-card {
+    padding: 22px;
+  
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+  
+    background: white;
+  }
+  
+  
+  .metric-label {
+    margin-bottom: 12px;
+  
+    color: #6b7280;
+  
+    font-size: 13px;
+    font-weight: 600;
+  
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  
+  .metric-value {
+    font-size: 30px;
+    font-weight: 700;
+  
+    letter-spacing: -1px;
+  }
+  
+  
+  .metric-helper {
+    margin-top: 8px;
+  
+    color: #9ca3af;
+  
+    font-size: 13px;
+  }
+  
+  
+  .cases-section {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+  
+    background: white;
+  
+    overflow: hidden;
+  }
+  
+  
+  .section-heading {
+    padding: 22px 24px;
+  
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  
+  .section-heading h2 {
+    margin: 0;
+  
+    font-size: 19px;
+  }
+  
+  
+  .section-heading p {
+    margin: 6px 0 0;
+  
+    color: #6b7280;
+  
+    font-size: 14px;
+  }
+  
+  
+  .table-wrapper {
+    overflow-x: auto;
+  }
+  
+  
+  .recovery-table {
+    width: 100%;
+  
+    border-collapse: collapse;
+  }
+  
+  
+  .recovery-table th {
+    padding: 13px 18px;
+  
+    background: #f9fafb;
+  
+    color: #6b7280;
+  
+    font-size: 12px;
+    font-weight: 600;
+  
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  
+  
+  .recovery-table td {
+    padding: 17px 18px;
+  
+    border-top: 1px solid #f3f4f6;
+  
+    font-size: 14px;
+  }
+  
+  
+  .recovery-table tbody tr:hover {
+    background: #fafafa;
+  }
+  
+  
+  .payment-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  
+    font-weight: 600;
+  }
+  
+  
+  .payment-cell span {
+    color: #9ca3af;
+  
+    font-size: 12px;
+    font-weight: 400;
+  }
+  
+  
+  .amount-cell {
+    font-weight: 600;
+  }
+  
+  
+  .diagnosis-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  
+    text-transform: capitalize;
+  }
+  
+  
+  .diagnosis-cell span {
+    color: #9ca3af;
+  
+    font-size: 11px;
+  
+    text-transform: none;
+  }
+  
+  
+  .status-badge {
+    display: inline-block;
+  
+    padding: 5px 9px;
+  
+    border-radius: 999px;
+  
+    background: #f3f4f6;
+  
+    color: #4b5563;
+  
+    font-size: 11px;
+    font-weight: 700;
+  
+    text-transform: uppercase;
+  }
+  
+  
+  .status-recovered {
+    background: #ecfdf5;
+    color: #047857;
+  }
+  
+  
+  .status-waiting {
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+  
+  
+  .status-escalated {
+    background: #fff7ed;
+    color: #c2410c;
+  }
+  
+  
+  .status-failed {
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+  
+  
+  .empty-state,
+  .page-state {
+    padding: 50px;
+  
+    color: #6b7280;
+  
+    text-align: center;
+  }
+  
+  
+  .error-state {
+    color: #b91c1c;
+  }
+  
+  
+  @media (max-width: 900px) {
+  
+    .metrics-grid {
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    }
+  
+  }
+  
+  
+  @media (max-width: 600px) {
+  
+    .dashboard {
+      padding: 20px;
+    }
+  
+  
+    .dashboard-header {
+      flex-direction: column;
+    }
+  
+  
+    .metrics-grid {
+      grid-template-columns: 1fr;
+    }
+  
+  }
+
+  .clickable-row {
+    cursor: pointer;
+  }

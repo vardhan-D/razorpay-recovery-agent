@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Header, HTTPException
-
+from fastapi.middleware.cors import CORSMiddleware
 from app.razorpay.webhooks import parse_razorpay_event,verify_webhook_signature
 from app.recovery.executor import execute_recovery_batch
 from app.services.metrics_service import calculate_recovery_metrics
@@ -11,6 +11,7 @@ from app.models.subscription import (
     SubscriptionStatus,
     MandateStatus,
 )
+from app.models.recovery import RecoveryStatus
 from app.init_db import init_db
 from app.agents.agent_orchestrator import (
     run_full_ai_recovery_loop,
@@ -59,6 +60,17 @@ app = FastAPI(
     title="Razorpay Recovery Agent",
     description="Backend for recovering failed subscription and mandate payments.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 init_db()
@@ -620,4 +632,344 @@ def database_status():
         "stored_recovery_cases": len(
             cases
         ),
+    }
+
+@app.get("/dashboard/metrics")
+def dashboard_metrics():
+
+    cases = get_all_recovery_cases()
+
+    revenue_at_risk = sum(
+        case.payment.amount
+        for case in cases
+    )
+
+    recovered_revenue = sum(
+        case.amount_recovered
+        for case in cases
+    )
+
+    recovered_cases = sum(
+        1
+        for case in cases
+        if case.recovery_status
+        == RecoveryStatus.recovered
+    )
+
+    active_cases = sum(
+        1
+        for case in cases
+        if case.recovery_status
+        in {
+            RecoveryStatus.pending,
+            RecoveryStatus.investigating,
+            RecoveryStatus.action_scheduled,
+            RecoveryStatus.waiting,
+            RecoveryStatus.failed,
+        }
+    )
+
+    escalated_cases = sum(
+        1
+        for case in cases
+        if case.recovery_status
+        == RecoveryStatus.escalated
+    )
+
+    recovery_rate = (
+        recovered_revenue
+        / revenue_at_risk
+        * 100
+        if revenue_at_risk
+        else 0
+    )
+
+    return {
+        "total_cases": len(cases),
+        "revenue_at_risk": revenue_at_risk,
+        "recovered_revenue": recovered_revenue,
+        "recovery_rate_percent": round(
+            recovery_rate,
+            2,
+        ),
+        "recovered_cases": recovered_cases,
+        "active_cases": active_cases,
+        "escalated_cases": escalated_cases,
+    }
+
+@app.post("/demo/seed-cases")
+def seed_demo_cases(count: int = 12):
+
+    if count < 1:
+        count = 1
+
+    if count > 50:
+        count = 50
+
+    cases = generate_failure_batch(count)
+
+    processed_cases = []
+
+    for case in cases:
+        processed_case = run_recovery_workflow(
+            case
+        )
+
+        save_recovery_case(
+            processed_case
+        )
+
+        processed_cases.append(
+            processed_case
+        )
+
+    return {
+        "seeded": len(processed_cases),
+        "cases": processed_cases,
+    }
+@app.post("/demo/seed-curated")
+def seed_curated_cases():
+
+    demo_cases = []
+
+    # -----------------------------
+    # Case 1 — Bank unavailable
+    # -----------------------------
+
+    payment_1 = Payment(
+        payment_id="pay_demo_bank_001",
+        customer_id="cust_demo_001",
+        subscription_id="sub_demo_001",
+        amount=1499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription_1 = Subscription(
+        subscription_id="sub_demo_001",
+        customer_id="cust_demo_001",
+        plan_name="Premium Monthly",
+        amount=1499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure_1 = FailureInfo(
+        failure_code="BANK_TEMPORARILY_UNAVAILABLE",
+        failure_message="Issuer bank is temporarily unavailable",
+        category=FailureCategory.bank_unavailable,
+        retryable=True,
+    )
+
+    case_1 = RecoveryCase(
+        case_id="demo_bank_failure",
+        payment=payment_1,
+        subscription=subscription_1,
+        failure=failure_1,
+    )
+
+    save_recovery_case(case_1)
+    demo_cases.append(case_1)
+
+    # -----------------------------
+    # Case 2 — Mandate expired
+    # -----------------------------
+
+    payment_2 = Payment(
+        payment_id="pay_demo_mandate_001",
+        customer_id="cust_demo_002",
+        subscription_id="sub_demo_002",
+        amount=2499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription_2 = Subscription(
+        subscription_id="sub_demo_002",
+        customer_id="cust_demo_002",
+        plan_name="Business Monthly",
+        amount=2499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.expired,
+    )
+
+    failure_2 = FailureInfo(
+        failure_code="MANDATE_EXPIRED",
+        failure_message="Recurring payment mandate has expired",
+        category=FailureCategory.mandate_issue,
+        retryable=False,
+    )
+
+    case_2 = RecoveryCase(
+        case_id="demo_mandate_expired",
+        payment=payment_2,
+        subscription=subscription_2,
+        failure=failure_2,
+    )
+
+    save_recovery_case(case_2)
+    demo_cases.append(case_2)
+
+    # -----------------------------
+    # Case 3 — Unknown failure
+    # -----------------------------
+
+    payment_3 = Payment(
+        payment_id="pay_demo_unknown_001",
+        customer_id="cust_demo_003",
+        subscription_id="sub_demo_003",
+        amount=999,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.card_mandate,
+        attempt_number=2,
+    )
+
+    subscription_3 = Subscription(
+        subscription_id="sub_demo_003",
+        customer_id="cust_demo_003",
+        plan_name="Standard Monthly",
+        amount=999,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure_3 = FailureInfo(
+        failure_code="UNKNOWN_FAILURE",
+        failure_message="Payment failed with insufficient diagnostic context",
+        category=FailureCategory.unknown,
+        retryable=False,
+    )
+
+    case_3 = RecoveryCase(
+        case_id="demo_unknown_failure",
+        payment=payment_3,
+        subscription=subscription_3,
+        failure=failure_3,
+    )
+
+    save_recovery_case(case_3)
+    demo_cases.append(case_3)
+
+    # -----------------------------
+    # Case 4 — Authentication issue
+    # -----------------------------
+
+    payment_4 = Payment(
+        payment_id="pay_demo_auth_001",
+        customer_id="cust_demo_004",
+        subscription_id="sub_demo_004",
+        amount=499,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.card_mandate,
+        attempt_number=1,
+    )
+
+    subscription_4 = Subscription(
+        subscription_id="sub_demo_004",
+        customer_id="cust_demo_004",
+        plan_name="Basic Monthly",
+        amount=499,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure_4 = FailureInfo(
+        failure_code="AUTHENTICATION_REQUIRED",
+        failure_message="Customer authentication is required",
+        category=FailureCategory.authentication_issue,
+        retryable=False,
+    )
+
+    case_4 = RecoveryCase(
+        case_id="demo_authentication",
+        payment=payment_4,
+        subscription=subscription_4,
+        failure=failure_4,
+    )
+
+    save_recovery_case(case_4)
+    demo_cases.append(case_4)
+
+    # -----------------------------
+    # Case 5 — Already recovered
+    # -----------------------------
+
+    payment_5 = Payment(
+        payment_id="pay_demo_recovered_001",
+        customer_id="cust_demo_005",
+        subscription_id="sub_demo_005",
+        amount=4999,
+        status=PaymentStatus.failed,
+        payment_method=PaymentMethod.upi_autopay,
+        attempt_number=1,
+    )
+
+    subscription_5 = Subscription(
+        subscription_id="sub_demo_005",
+        customer_id="cust_demo_005",
+        plan_name="Enterprise Monthly",
+        amount=4999,
+        status=SubscriptionStatus.active,
+        mandate_status=MandateStatus.active,
+    )
+
+    failure_5 = FailureInfo(
+        failure_code="BANK_TEMPORARILY_UNAVAILABLE",
+        failure_message="Issuer bank was temporarily unavailable",
+        category=FailureCategory.bank_unavailable,
+        retryable=True,
+    )
+
+    case_5 = RecoveryCase(
+        case_id="demo_recovered_case",
+        payment=payment_5,
+        subscription=subscription_5,
+        failure=failure_5,
+        recovery_status=RecoveryStatus.recovered,
+        amount_recovered=4999,
+    )
+
+    save_recovery_case(case_5)
+    demo_cases.append(case_5)
+
+    return {
+        "seeded": len(demo_cases),
+        "cases": demo_cases,
+    }
+
+@app.post("/recovery-cases/{case_id}/run-agent")
+def run_agent_for_case(case_id: str):
+
+    case = get_recovery_case(case_id)
+
+    if not case:
+        raise HTTPException(
+            status_code=404,
+            detail="Recovery case not found.",
+        )
+
+    if case.recovery_status in {
+        RecoveryStatus.recovered,
+        RecoveryStatus.escalated,
+        RecoveryStatus.stopped,
+        RecoveryStatus.waiting,
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Agent cannot run while case is {case.recovery_status.value}.",
+        )
+
+    processed_case = run_full_ai_recovery_loop(
+        case
+    )
+
+    save_recovery_case(
+        processed_case
+    )
+
+    return {
+        "processed": True,
+        "case": processed_case,
     }
