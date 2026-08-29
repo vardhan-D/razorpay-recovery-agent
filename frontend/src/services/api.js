@@ -62,3 +62,20 @@ export async function getDashboardMetrics() {
   
     return response.json()
   }
+
+  export async function seedCuratedDemo() {
+    const response = await fetch(
+      `${API_BASE_URL}/demo/seed-curated`,
+      {
+        method: "POST",
+      }
+    )
+  
+    if (!response.ok) {
+      throw new Error(
+        "Failed to prepare demo data"
+      )
+    }
+  
+    return response.json()
+  }
