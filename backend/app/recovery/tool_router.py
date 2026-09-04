@@ -3,7 +3,10 @@ from app.models.ai_decision import (
     SafetyValidationResult,
 )
 
-from app.models.audit import AuditEventType
+from app.models.audit import (
+    AuditEventType,
+)
+
 from app.models.recovery import (
     RecoveryCase,
     RecoveryStatus,
@@ -23,15 +26,19 @@ def execute_approved_action(
     safety_result: SafetyValidationResult,
 ) -> RecoveryCase:
     """
-    Route a safety-approved AI decision
+    Route the final safety-approved recovery action
     to the correct trusted backend tool.
+
+    The LLM never executes financial actions directly.
+    The safety layer decides the final action and this
+    router dispatches that action to deterministic tools.
     """
 
     action = safety_result.final_action
 
-    # -----------------------------
+    # --------------------------------
     # CREATE PAYMENT LINK
-    # -----------------------------
+    # --------------------------------
 
     if (
         action
@@ -51,18 +58,18 @@ def execute_approved_action(
             case
         )
 
-    # -----------------------------
+    # --------------------------------
     # RETRY
-    # -----------------------------
+    # --------------------------------
 
     if action == AIRecommendedAction.retry:
         return schedule_retry_tool(
             case
         )
 
-    # -----------------------------
+    # --------------------------------
     # SEND REMINDER
-    # -----------------------------
+    # --------------------------------
 
     if (
         action
@@ -72,9 +79,9 @@ def execute_approved_action(
             case
         )
 
-    # -----------------------------
+    # --------------------------------
     # PROMISE TO PAY
-    # -----------------------------
+    # --------------------------------
 
     if (
         action
@@ -84,9 +91,9 @@ def execute_approved_action(
             case
         )
 
-    # -----------------------------
+    # --------------------------------
     # ESCALATE
-    # -----------------------------
+    # --------------------------------
 
     if (
         action
@@ -96,9 +103,9 @@ def execute_approved_action(
             case
         )
 
-    # -----------------------------
+    # --------------------------------
     # STOP
-    # -----------------------------
+    # --------------------------------
 
     if action == AIRecommendedAction.stop:
         return stop_tool(
@@ -109,14 +116,16 @@ def execute_approved_action(
         f"Unsupported recovery action: {action}"
     )
 
+
 def schedule_retry_tool(
     case: RecoveryCase,
 ) -> RecoveryCase:
     """
-    Schedule a retry.
+    Record a bounded retry action.
 
-    This does not directly charge money yet.
-    It records a bounded retry action.
+    This version does not directly charge the customer.
+    It records that the retry has been scheduled and
+    moves the case into a waiting state.
     """
 
     case.recovery_attempts += 1
@@ -130,6 +139,7 @@ def schedule_retry_tool(
         AuditEventType.action_scheduled,
         "Retry recovery action scheduled.",
         {
+            "action": "retry",
             "recovery_attempt": (
                 case.recovery_attempts
             ),
@@ -146,7 +156,9 @@ def send_reminder_tool(
     """
     Record a customer reminder action.
 
-    Messaging provider integration comes later.
+    A real SMS/email/WhatsApp provider can be connected
+    later. For now this is represented as a trusted
+    backend recovery action.
     """
 
     case.recovery_attempts += 1
@@ -160,6 +172,7 @@ def send_reminder_tool(
         AuditEventType.action_executed,
         "Customer payment reminder queued.",
         {
+            "action": "send_reminder",
             "recovery_attempt": (
                 case.recovery_attempts
             ),
@@ -174,7 +187,9 @@ def create_promise_to_pay_tool(
     case: RecoveryCase,
 ) -> RecoveryCase:
     """
-    Create a placeholder promise-to-pay workflow.
+    Record a promise-to-pay workflow.
+
+    This is currently a placeholder recovery tool.
     """
 
     case.recovery_attempts += 1
@@ -188,6 +203,7 @@ def create_promise_to_pay_tool(
         AuditEventType.action_executed,
         "Promise-to-pay workflow created.",
         {
+            "action": "promise_to_pay",
             "recovery_attempt": (
                 case.recovery_attempts
             ),
@@ -201,6 +217,9 @@ def create_promise_to_pay_tool(
 def escalate_tool(
     case: RecoveryCase,
 ) -> RecoveryCase:
+    """
+    Escalate the recovery case for human review.
+    """
 
     case.recovery_status = (
         RecoveryStatus.escalated
@@ -211,6 +230,7 @@ def escalate_tool(
         AuditEventType.escalated,
         "Case escalated for human review.",
         {
+            "action": "escalate",
             "source": "ai_tool_router",
         },
     )
@@ -221,6 +241,9 @@ def escalate_tool(
 def stop_tool(
     case: RecoveryCase,
 ) -> RecoveryCase:
+    """
+    Stop recovery activity for the case.
+    """
 
     case.recovery_status = (
         RecoveryStatus.stopped
@@ -231,6 +254,7 @@ def stop_tool(
         AuditEventType.stopped,
         "Recovery workflow stopped safely.",
         {
+            "action": "stop",
             "source": "ai_tool_router",
         },
     )

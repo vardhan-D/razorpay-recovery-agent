@@ -53,8 +53,7 @@ from app.recovery.orchestrator import (
     run_recovery_workflow,
     run_recovery_workflow_batch,
 )
-from app.razorpay.client import get_razorpay_client
-
+from app.razorpay.client import client
 
 app = FastAPI(
     title="Razorpay Recovery Agent",
@@ -213,7 +212,7 @@ def run_agentic_recovery(count: int = 20):
 @app.get("/razorpay/test-connection")
 def test_razorpay_connection():
     try:
-        client = get_razorpay_client()
+        
 
         payments = client.payment.all(
             {
